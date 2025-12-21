@@ -27,8 +27,8 @@ An advanced Minecraft bot manager designed for high-efficiency farming and monit
 ### 2. Setup
 ```bash
 # Clone the repository
-git clone [https://github.com/YOUR_USERNAME/Mineflayer-MultiManager-Kampungeles.git](https://github.com/YOUR_USERNAME/Mineflayer-MultiManager-Kampungeles.git)
-cd Mineflayer-MultiManager-Kampungeles
+git clone [https://github.com/J3XXZY/Mineflayer-Multi-Bot-Manager.git](https://github.com/J3XXZY/Mineflayer-Multi-Bot-Manager.git)
+cd Mineflayer-Multi-Bot-Manager
 
 # Install dependencies
 npm install mineflayer
