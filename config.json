@@ -1,0 +1,17 @@
+{
+  "server": {
+    "host": "play.yourserver.com",
+    "port": 25565, //remove it if your server use the default port
+    "version": "1.20.1"
+  },
+  "botSettings": {
+    "usernames": ["Bot1", "Bot2", "Bot3"],
+    "password": "yourpassword",
+    "joinDelay": 5000
+  },
+  "webhook": {
+    "url": "[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)...",
+    "delayMs": 1800000,
+    "discordUserId": "YOUR_DISCORD_ID"
+  }
+}
