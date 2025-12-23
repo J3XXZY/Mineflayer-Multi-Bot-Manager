@@ -114,6 +114,7 @@ function renderCLI(bot, isGui = false) {
         output += `\n${colors.yellow}---- Hotbar ----${colors.reset}\n`;
         for (let i = 36; i <= 44; i++) { output += formatSlot(i) + "\n"; }
         
+        // --- THE HELPER GUIDE ---
         output += `\n${colors.gray}┌──────── GUIDE ────────┐\n`;
         output += `│ Armor: 05-08 | Off: 45 │\n`;
         output += `│ Main:  09-35 | Bar: 36 │\n`;
@@ -141,6 +142,7 @@ function createBot(name) {
         bot.spawned = true;
         log(`${colors.green}[+] ${name} connected.${colors.reset}`);
         sendStatusWebhook(name, "Connected ✅", "Bot has spawned successfully.", 3066993);
+        
         if (bot.checkTask) clearInterval(bot.checkTask);
         bot.checkTask = setInterval(() => { if (webhookActive) triggerStatsCheck(bot); }, config.webhook.delayMs);
     });
@@ -179,22 +181,6 @@ rl.on('line', (line) => {
         const cmd = args[0].toLowerCase();
         const targets = focusedBot ? [bots[focusedBot]] : Object.values(bots);
         switch (cmd) {
-            case 'help':
-                log(`\n${colors.bgWhite}${colors.black}  COMMAND LIST  ${colors.reset}`);
-                log(`${colors.cyan}.control <name>${colors.reset} - Focus a specific bot (or leave empty for ALL)`);
-                log(`${colors.cyan}.inv${colors.reset}            - Show list of items for focused bot`);
-                log(`${colors.cyan}.gui${colors.reset}            - Show current open chest/menu`);
-                log(`${colors.cyan}.drop <id>${colors.reset}      - Drop specific slot ID`);
-                log(`${colors.cyan}.dropall${colors.reset}        - Empty the inventory`);
-                log(`${colors.cyan}.click <id>${colors.reset}     - Click a slot in GUI/Inv`);
-                log(`${colors.cyan}.startwebhook${colors.reset}   - Start balance/shard loop`);
-                log(`${colors.cyan}.stopwebhook${colors.reset}    - Stop balance/shard loop`);
-                log(`${colors.cyan}.quit${colors.reset}           - Exit program`);
-                break;
-            case 'control': 
-                focusedBot = bots[args[1]] ? args[1] : null; 
-                log(`${colors.yellow}Control switched to: ${focusedBot || "ALL BOTS"}${colors.reset}`); 
-                break;
             case 'startwebhook': webhookActive = true; log(`${colors.green}Webhook started.${colors.reset}`); Object.values(bots).forEach(b => b.spawned && triggerStatsCheck(b)); break;
             case 'stopwebhook': webhookActive = false; log(`${colors.red}Webhook stopped.${colors.reset}`); break;
             case 'inv': if (targets[0]) renderCLI(targets[0], false); break;
