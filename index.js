@@ -150,7 +150,7 @@ function createBot(name) {
     bot.on('messagestr', (msg) => {
         const clean = stripColors(msg);
         if (clean.includes('has $')) { const m = clean.match(/\$[0-9.,]+[KMB]?/); if (m) bot.stats.balance = m[0]; }
-        if (clean.includes('current balance is')) { const m = clean.match(/\d+/); if (m) bot.stats.shards = m[0]; }
+        if (clean.includes('current balance is')) { const m = clean.match(/\d+(?:\.\d+)?[KMB]?/); if (m) bot.stats.shards = m[0]; }
         if (clean.toLowerCase().includes('/login')) bot.chat(`/login ${config.botSettings.password}`);
         logMessage(name, clean);
     });
