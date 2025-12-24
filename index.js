@@ -114,7 +114,6 @@ function renderCLI(bot, isGui = false) {
         output += `\n${colors.yellow}---- Hotbar ----${colors.reset}\n`;
         for (let i = 36; i <= 44; i++) { output += formatSlot(i) + "\n"; }
         
-        // --- THE HELPER GUIDE ---
         output += `\n${colors.gray}┌──────── GUIDE ────────┐\n`;
         output += `│ Armor: 05-08 | Off: 45 │\n`;
         output += `│ Main:  09-35 | Bar: 36 │\n`;
@@ -137,9 +136,13 @@ function triggerStatsCheck(bot) {
 function createBot(name) {
     const bot = mineflayer.createBot({ host: config.server.host, port: config.server.port, version: config.server.version, username: name, auth: 'offline', hideErrors: true });
     bot.stats = { balance: "$0", shards: "0" };
+    bot.loginAttempted = false;
+    bot.queueJoined = false;
 
     bot.on('spawn', () => {
         bot.spawned = true;
+        bot.loginAttempted = false;
+        bot.queueJoined = false;
         log(`${colors.green}[+] ${name} connected.${colors.reset}`);
         sendStatusWebhook(name, "Connected ✅", "Bot has spawned successfully.", 3066993);
         
@@ -149,9 +152,50 @@ function createBot(name) {
 
     bot.on('messagestr', (msg) => {
         const clean = stripColors(msg);
+        const lower = clean.toLowerCase();
+        
+        // Balance tracking
         if (clean.includes('has $')) { const m = clean.match(/\$[0-9.,]+[KMB]?/); if (m) bot.stats.balance = m[0]; }
         if (clean.includes('current balance is')) { const m = clean.match(/\d+(?:\.\d+)?[KMB]?/); if (m) bot.stats.shards = m[0]; }
-        if (clean.toLowerCase().includes('/login')) bot.chat(`/login ${config.botSettings.password}`);
+        
+        // Auto-login detection - multiple patterns
+        if (!bot.loginAttempted && (
+            lower.includes('/login') || 
+            lower.includes('please login') ||
+            lower.includes('you are not logged in') ||
+            lower.includes('authentication required')
+        )) {
+            bot.loginAttempted = true;
+            log(`${colors.yellow}[!] ${name} attempting login...${colors.reset}`);
+            setTimeout(() => {
+                bot.chat(`/login ${config.botSettings.password}`);
+            }, 1000);
+        }
+        
+        // Login success detection
+        if (bot.loginAttempted && !bot.queueJoined && (
+            lower.includes('successfully logged in') ||
+            lower.includes('you have logged in') ||
+            lower.includes('if you do not want to login next time') ||
+            lower.includes('/premium') ||
+            lower.includes('/startsession')
+        )) {
+            log(`${colors.green}[✓] ${name} logged in successfully!${colors.reset}`);
+            // Join queue after successful login
+            setTimeout(() => {
+                if (!bot.queueJoined) {
+                    bot.queueJoined = true;
+                    bot.chat('/queue donutsmp');
+                    log(`${colors.cyan}[→] ${name} joining DonutSMP queue...${colors.reset}`);
+                }
+            }, 2000);
+        }
+        
+        // Queue confirmation
+        if (lower.includes('added to the queue') || lower.includes('position in queue')) {
+            log(`${colors.green}[✓] ${name} in queue!${colors.reset}`);
+        }
+        
         logMessage(name, clean);
     });
 
@@ -180,15 +224,90 @@ rl.on('line', (line) => {
         const args = input.slice(1).split(' ');
         const cmd = args[0].toLowerCase();
         const targets = focusedBot ? [bots[focusedBot]] : Object.values(bots);
+        
         switch (cmd) {
-            case 'startwebhook': webhookActive = true; log(`${colors.green}Webhook started.${colors.reset}`); Object.values(bots).forEach(b => b.spawned && triggerStatsCheck(b)); break;
-            case 'stopwebhook': webhookActive = false; log(`${colors.red}Webhook stopped.${colors.reset}`); break;
-            case 'inv': if (targets[0]) renderCLI(targets[0], false); break;
-            case 'gui': if (targets[0]) renderCLI(targets[0], true); break;
-            case 'click': targets.forEach(b => { if (b.currentWindow) b.clickWindow(parseInt(args[1]), 0, 0); }); break;
-            case 'drop': targets.forEach(async b => { const item = b.inventory.slots[parseInt(args[1])]; if (item) await b.tossStack(item); }); break;
-            case 'dropall': targets.forEach(async b => { for (const i of b.inventory.items()) await b.tossStack(i); }); break;
-            case 'quit': process.exit();
+            case 'c':
+            case 'control':
+                if (!args[1]) {
+                    focusedBot = null;
+                    log(`${colors.cyan}Controlling ALL bots.${colors.reset}`);
+                } else {
+                    const botName = args[1];
+                    if (bots[botName]) {
+                        focusedBot = botName;
+                        log(`${colors.magenta}Now controlling: ${botName}${colors.reset}`);
+                    } else {
+                        log(`${colors.red}Bot "${botName}" not found. Available: ${Object.keys(bots).join(', ')}${colors.reset}`);
+                    }
+                }
+                break;
+                
+            case 'list':
+                log(`${colors.cyan}Connected bots: ${Object.keys(bots).join(', ')}${colors.reset}`);
+                break;
+                
+            case 'startwebhook': 
+                webhookActive = true; 
+                log(`${colors.green}Webhook started.${colors.reset}`); 
+                Object.values(bots).forEach(b => b.spawned && triggerStatsCheck(b)); 
+                break;
+                
+            case 'stopwebhook': 
+                webhookActive = false; 
+                log(`${colors.red}Webhook stopped.${colors.reset}`); 
+                break;
+                
+            case 'i':
+            case 'inv': 
+                if (targets[0]) renderCLI(targets[0], false); 
+                break;
+                
+            case 'gui': 
+                if (targets[0]) renderCLI(targets[0], true); 
+                break;
+                
+            case 'click': 
+                targets.forEach(b => { if (b.currentWindow) b.clickWindow(parseInt(args[1]), 0, 0); }); 
+                break;
+                
+            case 'drop': 
+                targets.forEach(async b => { const item = b.inventory.slots[parseInt(args[1])]; if (item) await b.tossStack(item); }); 
+                break;
+                
+            case 'dropall': 
+                targets.forEach(async b => { for (const i of b.inventory.items()) await b.tossStack(i); }); 
+                break;
+                
+            case 'login':
+                targets.forEach(b => {
+                    b.chat(`/login ${config.botSettings.password}`);
+                    log(`${colors.yellow}[!] ${b.username} attempting login...${colors.reset}`);
+                });
+                break;
+                
+            case 'help':
+                log(`
+${colors.bright}Available Commands:${colors.reset}
+  ${colors.cyan}.control <name> / .c <name>${colors.reset} - Control specific bot (or .control for ALL)
+  ${colors.cyan}.list${colors.reset} - Show all connected bots
+  ${colors.cyan}.inv / .i${colors.reset} - Show inventory
+  ${colors.cyan}.gui${colors.reset} - Show current GUI window
+  ${colors.cyan}.click <slot>${colors.reset} - Click slot in GUI
+  ${colors.cyan}.drop <slot>${colors.reset} - Drop item from slot
+  ${colors.cyan}.dropall${colors.reset} - Drop all items
+  ${colors.cyan}.login${colors.reset} - Manually trigger login
+  ${colors.cyan}.startwebhook${colors.reset} - Start webhook logging
+  ${colors.cyan}.stopwebhook${colors.reset} - Stop webhook logging
+  ${colors.cyan}.quit${colors.reset} - Exit program
+                `);
+                break;
+                
+            case 'quit':
+            case 'q':
+                process.exit();
+                
+            default:
+                log(`${colors.red}Unknown command. Type .help for commands.${colors.reset}`);
         }
     } else {
         const targets = focusedBot ? [bots[focusedBot]] : Object.values(bots);
