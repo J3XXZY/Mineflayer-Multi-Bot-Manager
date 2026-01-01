@@ -6,11 +6,13 @@
   "botSettings": {
     "usernames": ["Bot1", "Bot2", "Bot3"],
     "password": "yourpassword",
+    "masterName": "Steve",
     "joinDelay": 5000,
-    "autoQueueCommand": "/queue donutsmp"
+    "autoQueueCommand": "/queue donutsmp",
+    "autoAcceptTeleport": true
   },
   "webhook": {
-    "url": "[https://discord.com/api/webhooks/](https://discord.com/api/webhooks/)...",
+    "url": "https://discord.com/api/webhooks/...",
     "delayMs": 1800000,
     "discordUserId": "YOUR_DISCORD_ID"
   }
