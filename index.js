@@ -126,7 +126,6 @@ function renderCLI(bot, isGui) {
             const displayName = stripColors(item.displayName);
             const actualName = item.name;
             
-            // Check if item has been renamed (displayName different from actual name)
             const isRenamed = displayName.toLowerCase() !== actualName.replace('minecraft:', '').replace(/_/g, ' ');
             
             if (isRenamed) {
@@ -176,6 +175,171 @@ function triggerStatsCheck(bot) {
     }, 12000);
 }
 
+function antiAFK(bot) {
+    if (!bot.spawned) return;
+    const actions = [
+        function() { bot.setControlState('jump', true); setTimeout(function() { bot.setControlState('jump', false); }, 100); },
+        function() { bot.look(bot.entity.yaw + Math.PI / 4, 0); },
+        function() { bot.activateItem(); setTimeout(function() { bot.deactivateItem(); }, 100); }
+    ];
+    actions[Math.floor(Math.random() * actions.length)]();
+}
+
+function findAndEquipArmor(bot) {
+    if (!bot.spawned) return;
+    const armorSlots = {
+        helmet: 5,
+        chestplate: 6,
+        leggings: 7,
+        boots: 8
+    };
+    
+    Object.keys(armorSlots).forEach(function(type) {
+        const slot = armorSlots[type];
+        if (!bot.inventory.slots[slot]) {
+            const armor = bot.inventory.items().find(function(item) {
+                return item.name.includes(type);
+            });
+            if (armor) {
+                bot.equip(armor, 'head').catch(function() {});
+            }
+        }
+    });
+}
+
+function organizeInventory(bot) {
+    if (!bot.spawned) return;
+    log(colors.yellow + '[⚙] ' + bot.username + ' organizing inventory...' + colors.reset);
+    
+    const itemGroups = {};
+    bot.inventory.items().forEach(function(item) {
+        if (!itemGroups[item.name]) itemGroups[item.name] = [];
+        itemGroups[item.name].push(item);
+    });
+    
+    Object.keys(itemGroups).forEach(function(itemName) {
+        const items = itemGroups[itemName];
+        if (items.length > 1) {
+            for (let i = 1; i < items.length; i++) {
+                bot.clickWindow(items[i].slot, 0, 0).catch(function() {});
+            }
+        }
+    });
+}
+
+function autoRespawn(bot) {
+    bot.on('death', function() {
+        log(colors.red + '[☠] ' + bot.username + ' died! Respawning...' + colors.reset);
+        sendStatusWebhook(bot.username, 'Died ☠️', 'Bot died and is respawning...', 15158332);
+        setTimeout(function() {
+            bot.chat('/spawn');
+        }, 2000);
+    });
+}
+
+function trackPlaytime(bot) {
+    bot.joinTime = Date.now();
+    setInterval(function() {
+        if (bot.spawned && bot.fullyJoined) {
+            const playtime = Math.floor((Date.now() - bot.joinTime) / 1000 / 60);
+            if (playtime > 0 && playtime % 60 === 0) {
+                log(colors.cyan + '[⏰] ' + bot.username + ' playtime: ' + playtime + ' minutes' + colors.reset);
+            }
+        }
+    }, 60000);
+}
+
+function autoAcceptTeleport(bot) {
+    const masterName = config.botSettings.masterName || '';
+    
+    bot.on('messagestr', function(msg) {
+        const clean = stripColors(msg);
+        
+        // New TPA system: "<player> sent you a tpa request"
+        const tpaMatch = clean.match(/^(\w+)\s+sent you a tpa request/i);
+        if (tpaMatch) {
+            const playerName = tpaMatch[1];
+            
+            // If masterName is set, only accept from master
+            if (masterName && playerName !== masterName) {
+                log(colors.yellow + '[!] ' + bot.username + ' ignored TPA from ' + playerName + ' (not master)' + colors.reset);
+                return;
+            }
+            
+            log(colors.cyan + '[→] ' + bot.username + ' accepting TPA from ' + playerName + '...' + colors.reset);
+            
+            // Send tpaccept command
+            setTimeout(function() {
+                bot.chat('/tpaccept ' + playerName);
+            }, 500);
+            
+            // Wait for GUI window to open and click lime stained glass pane
+            const windowListener = function(window) {
+                setTimeout(function() {
+                    if (bot.currentWindow) {
+                        // Search for lime stained glass pane
+                        for (let i = 0; i < bot.currentWindow.slots.length; i++) {
+                            const item = bot.currentWindow.slots[i];
+                            if (item && (item.name === 'minecraft:lime_stained_glass_pane' || item.name.includes('lime_stained_glass'))) {
+                                bot.clickWindow(i, 0, 0).then(function() {
+                                    log(colors.green + '[✓✓] ' + bot.username + ' successfully teleported to ' + playerName + '!' + colors.reset);
+                                    bot.removeListener('windowOpen', windowListener);
+                                }).catch(function(err) {
+                                    log(colors.red + '[✗] ' + bot.username + ' failed to click teleport confirmation: ' + err.message + colors.reset);
+                                });
+                                return;
+                            }
+                        }
+                        log(colors.yellow + '[!] ' + bot.username + ' could not find lime glass pane in window' + colors.reset);
+                    }
+                }, 500);
+            };
+            
+            bot.once('windowOpen', windowListener);
+            
+            // Cleanup listener after 10 seconds if no window opens
+            setTimeout(function() {
+                bot.removeListener('windowOpen', windowListener);
+            }, 10000);
+            
+            return;
+        }
+        
+        // Old TPA system fallback: "has requested to teleport" or "/tpaccept"
+        if (clean.includes('has requested to teleport') || clean.includes('/tpaccept')) {
+            // If masterName is set, only accept from master
+            if (masterName) {
+                if (clean.includes(masterName)) {
+                    setTimeout(function() {
+                        bot.chat('/tpaccept');
+                        log(colors.green + '[✓] ' + bot.username + ' accepted teleport from master: ' + masterName + colors.reset);
+                    }, 1000);
+                } else {
+                    log(colors.yellow + '[!] ' + bot.username + ' ignored teleport request (not from master)' + colors.reset);
+                }
+            } else {
+                // No master set, accept all teleports
+                setTimeout(function() {
+                    bot.chat('/tpaccept');
+                    log(colors.green + '[✓] ' + bot.username + ' accepted teleport request' + colors.reset);
+                }, 1000);
+            }
+        }
+    });
+}
+
+function collectNearbyItems(bot, radius) {
+    if (!bot.spawned) return;
+    const items = Object.values(bot.entities).filter(function(entity) {
+        return entity.type === 'object' && entity.objectType === 'Item' &&
+               bot.entity.position.distanceTo(entity.position) < (radius || 5);
+    });
+    
+    if (items.length > 0) {
+        log(colors.green + '[↓] ' + bot.username + ' collecting ' + items.length + ' nearby items...' + colors.reset);
+    }
+}
+
 function createBot(name) {
     const bot = mineflayer.createBot({ 
         host: config.server.host, 
@@ -190,6 +354,11 @@ function createBot(name) {
     bot.loginAttempted = false;
     bot.queueJoined = false;
     bot.fullyJoined = false;
+    
+    // Enable useful features
+    autoRespawn(bot);
+    trackPlaytime(bot);
+    if (config.botSettings.autoAcceptTeleport) autoAcceptTeleport(bot);
 
     bot.on('spawn', function() {
         bot.spawned = true;
@@ -220,6 +389,7 @@ function createBot(name) {
             if (m) bot.stats.shards = m[0]; 
         }
         
+        // Detect login prompt
         if (!bot.loginAttempted && (
             lower.indexOf('/login') !== -1 || 
             lower.indexOf('please login') !== -1 ||
@@ -233,12 +403,12 @@ function createBot(name) {
             }, 1000);
         }
         
+        // Detect successful login with the specific server messages
         if (bot.loginAttempted && !bot.queueJoined && (
-            lower.indexOf('successfully logged in') !== -1 ||
-            lower.indexOf('you have logged in') !== -1 ||
-            lower.indexOf('if you do not want to login next time') !== -1 ||
-            lower.indexOf('/premium') !== -1 ||
-            lower.indexOf('/startsession') !== -1
+            clean.indexOf('You still do not have an email address assigned') !== -1 ||
+            clean.indexOf('You still do not have second factor enabled') !== -1 ||
+            clean.indexOf('/changemailaddress') !== -1 ||
+            clean.indexOf('/requestsecondfactor') !== -1
         )) {
             log(colors.green + '[✓] ' + name + ' logged in successfully!' + colors.reset);
             if (config.botSettings.autoQueueCommand) {
@@ -346,15 +516,87 @@ rl.on('line', function(line) {
                 break;
                 
             case 'click': 
+                if (!args[1]) {
+                    log(colors.red + 'Usage: .click <slot|itemname>' + colors.reset);
+                    break;
+                }
+                
                 targets.forEach(function(b) { 
-                    if (b.currentWindow) b.clickWindow(parseInt(args[1]), 0, 0); 
+                    if (b.currentWindow) {
+                        // Check if argument is a number (slot) or item name
+                        if (!isNaN(args[1])) {
+                            // Click by slot number
+                            b.clickWindow(parseInt(args[1]), 0, 0);
+                            log(colors.green + '[✓] ' + b.username + ' clicked slot ' + args[1] + colors.reset);
+                        } else {
+                            // Click by item name
+                            const searchName = args.slice(1).join(' ').toLowerCase();
+                            let found = false;
+                            
+                            for (let i = 0; i < b.currentWindow.slots.length; i++) {
+                                const item = b.currentWindow.slots[i];
+                                if (item) {
+                                    const displayName = item.displayName ? stripColors(item.displayName).toLowerCase() : '';
+                                    const itemName = item.name.replace('minecraft:', '').replace(/_/g, ' ').toLowerCase();
+                                    
+                                    if (displayName.includes(searchName) || itemName.includes(searchName)) {
+                                        b.clickWindow(i, 0, 0);
+                                        log(colors.green + '[✓] ' + b.username + ' clicked "' + (displayName || itemName) + '" at slot ' + i + colors.reset);
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (!found) {
+                                log(colors.yellow + '[!] ' + b.username + ' could not find item: ' + searchName + colors.reset);
+                            }
+                        }
+                    } else {
+                        log(colors.red + '[!] ' + b.username + ' has no window open' + colors.reset);
+                    }
                 }); 
                 break;
                 
             case 'drop': 
-                targets.forEach(async function(b) { 
-                    const item = b.inventory.slots[parseInt(args[1])]; 
-                    if (item) await b.tossStack(item); 
+                if (!args[1]) {
+                    log(colors.red + 'Usage: .drop <slot|itemname>' + colors.reset);
+                    break;
+                }
+                
+                targets.forEach(async function(b) {
+                    // Check if argument is a number (slot) or item name
+                    if (!isNaN(args[1])) {
+                        // Drop by slot number
+                        const item = b.inventory.slots[parseInt(args[1])];
+                        if (item) {
+                            await b.tossStack(item);
+                            log(colors.green + '[✓] ' + b.username + ' dropped item from slot ' + args[1] + colors.reset);
+                        } else {
+                            log(colors.yellow + '[!] ' + b.username + ' has no item in slot ' + args[1] + colors.reset);
+                        }
+                    } else {
+                        // Drop by item name
+                        const searchName = args.slice(1).join(' ').toLowerCase();
+                        const items = b.inventory.items();
+                        let found = false;
+                        
+                        for (const item of items) {
+                            const displayName = item.displayName ? stripColors(item.displayName).toLowerCase() : '';
+                            const itemName = item.name.replace('minecraft:', '').replace(/_/g, ' ').toLowerCase();
+                            
+                            if (displayName.includes(searchName) || itemName.includes(searchName)) {
+                                await b.tossStack(item);
+                                log(colors.green + '[✓] ' + b.username + ' dropped "' + (displayName || itemName) + '"' + colors.reset);
+                                found = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!found) {
+                            log(colors.yellow + '[!] ' + b.username + ' could not find item: ' + searchName + colors.reset);
+                        }
+                    }
                 }); 
                 break;
                 
@@ -370,22 +612,68 @@ rl.on('line', function(line) {
                     log(colors.yellow + '[!] ' + b.username + ' attempting login...' + colors.reset);
                 });
                 break;
+            
+            case 'antiafk':
+                if (!args[1] || args[1] === 'start') {
+                    targets.forEach(function(b) {
+                        if (b.afkInterval) clearInterval(b.afkInterval);
+                        b.afkInterval = setInterval(function() { antiAFK(b); }, 30000);
+                        log(colors.green + '[✓] Anti-AFK started for ' + b.username + colors.reset);
+                    });
+                } else if (args[1] === 'stop') {
+                    targets.forEach(function(b) {
+                        if (b.afkInterval) {
+                            clearInterval(b.afkInterval);
+                            b.afkInterval = null;
+                            log(colors.red + '[✗] Anti-AFK stopped for ' + b.username + colors.reset);
+                        }
+                    });
+                }
+                break;
+            
+            case 'armor':
+                targets.forEach(function(b) { findAndEquipArmor(b); });
+                break;
+            
+            case 'organize':
+                targets.forEach(function(b) { organizeInventory(b); });
+                break;
+            
+            case 'stats':
+                targets.forEach(function(b) {
+                    log(colors.cyan + b.username + ' Stats:' + colors.reset + 
+                        '\n  Balance: ' + colors.green + b.stats.balance + colors.reset +
+                        '\n  Shards: ' + colors.yellow + b.stats.shards + colors.reset +
+                        '\n  Food: ' + colors.magenta + (b.food || 'N/A') + colors.reset +
+                        '\n  Health: ' + colors.red + (b.health || 'N/A') + colors.reset);
+                });
+                break;
                 
             case 'help':
             case 'h':
                 log('\n' + colors.bright + 'Available Commands:' + colors.reset + '\n' +
-                    '  ' + colors.cyan + '.control <n>' + colors.reset + ' - Control specific bot (or .control for ALL)\n' +
+                    colors.yellow + '═══ Basic Control ═══' + colors.reset + '\n' +
+                    '  ' + colors.cyan + '.control <name>' + colors.reset + ' - Control specific bot (or .control for ALL)\n' +
                     '  ' + colors.cyan + '.list' + colors.reset + ' - Show all connected bots\n' +
+                    '  ' + colors.cyan + '.stats' + colors.reset + ' - Show bot stats (balance, health, food)\n' +
+                    '\n' + colors.yellow + '═══ Inventory Management ═══' + colors.reset + '\n' +
                     '  ' + colors.cyan + '.inv' + colors.reset + ' - Show inventory\n' +
                     '  ' + colors.cyan + '.gui' + colors.reset + ' - Show current GUI window\n' +
-                    '  ' + colors.cyan + '.click <slot>' + colors.reset + ' - Click slot in GUI\n' +
-                    '  ' + colors.cyan + '.drop <slot>' + colors.reset + ' - Drop item from slot\n' +
+                    '  ' + colors.cyan + '.click <slot|name>' + colors.reset + ' - Click slot number OR item by name\n' +
+                    '  ' + colors.cyan + '.drop <slot|name>' + colors.reset + ' - Drop item by slot number OR name\n' +
                     '  ' + colors.cyan + '.dropall' + colors.reset + ' - Drop all items\n' +
+                    '  ' + colors.cyan + '.organize' + colors.reset + ' - Organize and stack items\n' +
+                    '  ' + colors.cyan + '.armor' + colors.reset + ' - Auto-equip armor\n' +
+                    '\n' + colors.yellow + '═══ Automation ═══' + colors.reset + '\n' +
+                    '  ' + colors.cyan + '.antiafk start/stop' + colors.reset + ' - Toggle anti-AFK movements\n' +
+                    '\n' + colors.yellow + '═══ Server Management ═══' + colors.reset + '\n' +
                     '  ' + colors.cyan + '.login' + colors.reset + ' - Manually trigger login\n' +
                     '  ' + colors.cyan + '.startwebhook' + colors.reset + ' - Start webhook logging\n' +
                     '  ' + colors.cyan + '.stopwebhook' + colors.reset + ' - Stop webhook logging\n' +
                     '  ' + colors.cyan + '.quit / .q' + colors.reset + ' - Exit program\n\n' +
-                    colors.gray + 'Note: Auto-queue is configured in config.json' + colors.reset);
+                    colors.gray + 'Auto-features: Login, Queue, Respawn\n' +
+                    'Master teleport: Set "masterName" in config.json\n' +
+                    'Configure in config.json' + colors.reset);
                 break;
                 
             case 'quit':
