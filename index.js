@@ -345,7 +345,7 @@ function createBot(name) {
             log(colors.green + '[+] ' + name + ' connected.' + colors.reset);
             sendStatusWebhook(name, 'Connected ✅', 'Bot has spawned successfully.', 3066993);
             
-            if (!bot.loginAttempted) {
+        if (!bot.loginAttempted) {
                 bot.loginAttempted = true;
                 setTimeout(function() {
                     if (bot.spawned) {
@@ -374,6 +374,15 @@ function createBot(name) {
             const m = clean.match(/\d+(?:\.\d+)?[KMB]?/); 
             if (m) bot.stats.shards = m[0]; 
         }
+        if (!bot.loginAttempted && (
+            clean.indexOf('You still do not have an email address assigned to your account') !== -1 ||
+            clean.indexOf('You still do not have second factor enabled on your account') !== -1 ||
+            clean.indexOf('/changemailaddress') !== -1 ||
+            clean.indexOf('/requestsecondfactor') !== -1
+        )) {
+            bot.loginAttempted = true;
+            log(colors.green + '[✓] ' + name + ' logged in successfully!' + colors.reset);
+        }
         
         if (bot.loginAttempted && !bot.queueJoined && (
             clean.indexOf('You still do not have an email address assigned to your account') !== -1 ||
@@ -381,7 +390,6 @@ function createBot(name) {
             clean.indexOf('/changemailaddress') !== -1 ||
             clean.indexOf('/requestsecondfactor') !== -1
         )) {
-            log(colors.green + '[✓] ' + name + ' logged in successfully!' + colors.reset);
             if (config.botSettings.autoQueueCommand) {
                 setTimeout(function() {
                     if (!bot.queueJoined) {
