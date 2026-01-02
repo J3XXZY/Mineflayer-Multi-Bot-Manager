@@ -123,22 +123,31 @@ function renderCLI(bot, isGui) {
         const item = window.slots[i];
         const slotId = i.toString().padStart(2, '0');
         if (item) {
-            const displayName = item.displayName ? stripColors(item.displayName) : item.name.replace('minecraft:', '').replace(/_/g, ' ');
+            let displayName;
+
+            if (
+                item.nbt &&
+                item.nbt.value &&
+                item.nbt.value.display &&
+                item.nbt.value.display.value &&
+                item.nbt.value.display.value.Name
+            ) {
+                displayName = stripColors(
+                    JSON.parse(item.nbt.value.display.value.Name.value).text
+                );
+            } else if (item.displayName) {
+                displayName = stripColors(item.displayName);
+            } else {
+                displayName = item.name.replace('minecraft:', '').replace(/_/g, ' ');
+            }
+ 
             const actualName = item.name.replace('minecraft:', '');
             
-            const hasCustomName = item.nbt && item.nbt.value && item.nbt.value.display && item.nbt.value.display.value.Name;
+            return colors.cyan + slotId + '.' + colors.reset + ' ' + 
+                    colors.green + displayName + colors.reset + 
+                    ' ' + colors.gray + '(' + actualName + ')' + colors.reset + 
+                    ' (' + colors.bright + item.count + colors.reset + ')';
             
-            if (hasCustomName) {
-                return colors.cyan + slotId + '.' + colors.reset + ' ' + 
-                       colors.bright + colors.yellow + displayName + colors.reset + 
-                       ' ' + colors.gray + '[' + actualName + ']' + colors.reset + 
-                       ' (' + colors.bright + item.count + colors.reset + ')';
-            } else {
-                return colors.cyan + slotId + '.' + colors.reset + ' ' + 
-                       colors.green + displayName + colors.reset + 
-                       ' ' + colors.gray + '(' + actualName + ')' + colors.reset + 
-                       ' (' + colors.bright + item.count + colors.reset + ')';
-            }
         }
         return colors.gray + slotId + '. --' + colors.reset;
     };
