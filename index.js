@@ -334,25 +334,6 @@ function autoAcceptTeleport(bot) {
             
             return;
         }
-        
-        if (clean.includes('has requested to teleport') || clean.includes('/tpaccept')) {
-            if (masterName) {
-                if (clean.includes(masterName)) {
-                    setTimeout(function() {
-                        bot.chat('/tpaccept');
-                        log(colors.green + '[✓] ' + bot.username + ' accepted teleport from master: ' + masterName + colors.reset);
-                    }, 1000);
-                } else {
-                    log(colors.yellow + '[!] ' + bot.username + ' ignored teleport request (not from master)' + colors.reset);
-                }
-            } else {
-                setTimeout(function() {
-                    bot.chat('/tpaccept');
-                    log(colors.green + '[✓] ' + bot.username + ' accepted teleport request' + colors.reset);
-                }, 1000);
-            }
-        }
-    });
 }
 
 function createBot(name) {
