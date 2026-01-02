@@ -251,90 +251,65 @@ function trackPlaytime(bot) {
 
 function autoAcceptTeleport(bot) {
     const masterName = config.botSettings.masterName || '';
-    
-    bot.on('messagestr', function(msg) {
-        const clean = stripColors(msg);
 
-        const tpaHereMatch = clean.match(/^(\w+)\s+sent you a tpahere request/i);
-        if (tpaHereMatch) {
-            const playerName = tpaHereMatch[1];
-            
-            if (masterName && playerName !== masterName) {
-                log(colors.yellow + '[!] ' + bot.username + ' ignored TPAHere from ' + playerName + ' (not master)' + colors.reset);
-                return;
-            }
-            
-            log(colors.cyan + '[→] ' + bot.username + ' accepting TPAHere from ' + playerName + '...' + colors.reset);
-            
-            setTimeout(function() {
-                bot.chat('/tpaccept ' + playerName);
-            }, 500);
-            
-            const windowListener = function(window) {
-                setTimeout(function() {
-                    if (bot.currentWindow) {
-                        for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-                            const item = bot.currentWindow.slots[i];
-                            if (item && (item.name === 'minecraft:lime_stained_glass_pane' || item.name.includes('lime_stained_glass'))) {
-                                bot.clickWindow(i, 0, 0).then(function() {
-                                    log(colors.green + '[✓✓] ' + bot.username + ' successfully teleported to ' + playerName + '!' + colors.reset);
-                                    bot.removeListener('windowOpen', windowListener);
-                                }).catch(function(err) {
-                                    log(colors.red + '[✗] ' + bot.username + ' failed to click teleport confirmation: ' + err.message + colors.reset);
-                                });
-                                return;
-                            }
-                        }
-                        log(colors.yellow + '[!] ' + bot.username + ' could not find lime glass pane in window' + colors.reset);
-                    }
-                }, 500);
-            };
-            
-        
-        const tpaMatch = clean.match(/^(\w+)\s+sent you a tpa request/i);
-        if (tpaMatch) {
-            const playerName = tpaMatch[1];
-            
-            if (masterName && playerName !== masterName) {
-                log(colors.yellow + '[!] ' + bot.username + ' ignored TPA from ' + playerName + ' (not master)' + colors.reset);
-                return;
-            }
-            
-            log(colors.cyan + '[→] ' + bot.username + ' accepting TPA from ' + playerName + '...' + colors.reset);
-            
-            setTimeout(function() {
-                bot.chat('/tpaccept ' + playerName);
-            }, 500);
-            
-            const windowListener = function(window) {
-                setTimeout(function() {
-                    if (bot.currentWindow) {
-                        for (let i = 0; i < bot.currentWindow.slots.length; i++) {
-                            const item = bot.currentWindow.slots[i];
-                            if (item && (item.name === 'minecraft:lime_stained_glass_pane' || item.name.includes('lime_stained_glass'))) {
-                                bot.clickWindow(i, 0, 0).then(function() {
-                                    log(colors.green + '[✓✓] ' + bot.username + ' successfully teleported to ' + playerName + '!' + colors.reset);
-                                    bot.removeListener('windowOpen', windowListener);
-                                }).catch(function(err) {
-                                    log(colors.red + '[✗] ' + bot.username + ' failed to click teleport confirmation: ' + err.message + colors.reset);
-                                });
-                                return;
-                            }
-                        }
-                        log(colors.yellow + '[!] ' + bot.username + ' could not find lime glass pane in window' + colors.reset);
-                    }
-                }, 500);
-            };
-            
-            bot.once('windowOpen', windowListener);
-            
-            setTimeout(function() {
-                bot.removeListener('windowOpen', windowListener);
-            }, 10000);
-            
+    function handleTeleport(playerName) {
+        if (masterName && playerName !== masterName) {
+            log(colors.yellow + '[!] ' + bot.username + ' ignored teleport from ' + playerName + ' (not master)' + colors.reset);
             return;
         }
+
+        log(colors.cyan + '[→] ' + bot.username + ' accepting teleport from ' + playerName + '...' + colors.reset);
+
+        setTimeout(() => {
+            bot.chat('/tpaccept ' + playerName);
+        }, 500);
+
+        const windowListener = () => {
+            setTimeout(() => {
+                const win = bot.currentWindow;
+                if (!win) return;
+
+                for (let i = 0; i < win.slots.length; i++) {
+                    const item = win.slots[i];
+                    if (item && item.name.includes('lime_stained_glass')) {
+                        bot.clickWindow(i, 0, 0)
+                            .then(() => {
+                                log(colors.green + '[✓✓] ' + bot.username + ' teleported to ' + playerName + '!' + colors.reset);
+                            })
+                            .catch(err => {
+                                log(colors.red + '[✗] ' + bot.username + ' teleport confirm failed: ' + err.message + colors.reset);
+                            });
+                        return;
+                    }
+                }
+
+                log(colors.yellow + '[!] ' + bot.username + ' teleport GUI opened but no confirm button found' + colors.reset);
+            }, 500);
+        };
+
+        bot.once('windowOpen', windowListener);
+
+        setTimeout(() => {
+            bot.removeListener('windowOpen', windowListener);
+        }, 10000);
+    }
+
+    bot.on('messagestr', msg => {
+        const clean = stripColors(msg);
+
+        const tpaHere = clean.match(/^(\w+)\s+sent you a tpahere request/i);
+        if (tpaHere) {
+            handleTeleport(tpaHere[1]);
+            return;
+        }
+
+        const tpa = clean.match(/^(\w+)\s+sent you a tpa request/i);
+        if (tpa) {
+            handleTeleport(tpa[1]);
+        }
+    });
 }
+
 
 function createBot(name) {
     const bot = mineflayer.createBot({ 
