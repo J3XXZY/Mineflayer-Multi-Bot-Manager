@@ -297,7 +297,7 @@ function autoAcceptTeleport(bot) {
     bot.on('messagestr', msg => {
         const clean = stripColors(msg);
 
-        const tpaHere = clean.match(/^(\w+)\s+sent you a tpahere request/i);
+        const tpaHere = clean.match(/^(\w+)\s+sent you a tphere request/i);
         if (tpaHere) {
             handleTeleport(tpaHere[1]);
             return;
