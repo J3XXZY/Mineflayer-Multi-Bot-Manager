@@ -650,7 +650,7 @@ rl.on('line', function(line) {
                 log(colors.red + 'Unknown command. Type .help for commands.' + colors.reset);
         }
     } else {
-        const targets = focusedBot ? [bots[focusedBot]] : Object.values
+        const targets = focusedBot ? [bots[focusedBot]] : Object.values(bots);
         targets.forEach(function(b) { 
             if (b.spawned) b.chat(input); 
         });
