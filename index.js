@@ -123,20 +123,20 @@ function renderCLI(bot, isGui) {
         const item = window.slots[i];
         const slotId = i.toString().padStart(2, '0');
         if (item) {
-            const displayName = stripColors(item.displayName);
-            const actualName = item.name;
+            const displayName = item.displayName ? stripColors(item.displayName) : item.name.replace('minecraft:', '').replace(/_/g, ' ');
+            const actualName = item.name.replace('minecraft:', '');
             
-            const isRenamed = displayName.toLowerCase() !== actualName.replace('minecraft:', '').replace(/_/g, ' ');
+            const hasCustomName = item.nbt && item.nbt.value && item.nbt.value.display && item.nbt.value.display.value.Name;
             
-            if (isRenamed) {
+            if (hasCustomName) {
                 return colors.cyan + slotId + '.' + colors.reset + ' ' + 
-                       colors.green + displayName + colors.reset + 
-                       ' ' + colors.gray + '[' + actualName.replace('minecraft:', '') + ']' + colors.reset + 
+                       colors.bright + colors.yellow + displayName + colors.reset + 
+                       ' ' + colors.gray + '[' + actualName + ']' + colors.reset + 
                        ' (' + colors.bright + item.count + colors.reset + ')';
             } else {
                 return colors.cyan + slotId + '.' + colors.reset + ' ' + 
                        colors.green + displayName + colors.reset + 
-                       ' ' + colors.gray + '(' + actualName.replace('minecraft:', '') + ')' + colors.reset + 
+                       ' ' + colors.gray + '(' + actualName + ')' + colors.reset + 
                        ' (' + colors.bright + item.count + colors.reset + ')';
             }
         }
@@ -255,12 +255,10 @@ function autoAcceptTeleport(bot) {
     bot.on('messagestr', function(msg) {
         const clean = stripColors(msg);
         
-        // New TPA system: "<player> sent you a tpa request"
         const tpaMatch = clean.match(/^(\w+)\s+sent you a tpa request/i);
         if (tpaMatch) {
             const playerName = tpaMatch[1];
             
-            // If masterName is set, only accept from master
             if (masterName && playerName !== masterName) {
                 log(colors.yellow + '[!] ' + bot.username + ' ignored TPA from ' + playerName + ' (not master)' + colors.reset);
                 return;
@@ -268,16 +266,13 @@ function autoAcceptTeleport(bot) {
             
             log(colors.cyan + '[→] ' + bot.username + ' accepting TPA from ' + playerName + '...' + colors.reset);
             
-            // Send tpaccept command
             setTimeout(function() {
                 bot.chat('/tpaccept ' + playerName);
             }, 500);
             
-            // Wait for GUI window to open and click lime stained glass pane
             const windowListener = function(window) {
                 setTimeout(function() {
                     if (bot.currentWindow) {
-                        // Search for lime stained glass pane
                         for (let i = 0; i < bot.currentWindow.slots.length; i++) {
                             const item = bot.currentWindow.slots[i];
                             if (item && (item.name === 'minecraft:lime_stained_glass_pane' || item.name.includes('lime_stained_glass'))) {
@@ -297,7 +292,6 @@ function autoAcceptTeleport(bot) {
             
             bot.once('windowOpen', windowListener);
             
-            // Cleanup listener after 10 seconds if no window opens
             setTimeout(function() {
                 bot.removeListener('windowOpen', windowListener);
             }, 10000);
@@ -305,9 +299,7 @@ function autoAcceptTeleport(bot) {
             return;
         }
         
-        // Old TPA system fallback: "has requested to teleport" or "/tpaccept"
         if (clean.includes('has requested to teleport') || clean.includes('/tpaccept')) {
-            // If masterName is set, only accept from master
             if (masterName) {
                 if (clean.includes(masterName)) {
                     setTimeout(function() {
@@ -318,7 +310,6 @@ function autoAcceptTeleport(bot) {
                     log(colors.yellow + '[!] ' + bot.username + ' ignored teleport request (not from master)' + colors.reset);
                 }
             } else {
-                // No master set, accept all teleports
                 setTimeout(function() {
                     bot.chat('/tpaccept');
                     log(colors.green + '[✓] ' + bot.username + ' accepted teleport request' + colors.reset);
@@ -326,18 +317,6 @@ function autoAcceptTeleport(bot) {
             }
         }
     });
-}
-
-function collectNearbyItems(bot, radius) {
-    if (!bot.spawned) return;
-    const items = Object.values(bot.entities).filter(function(entity) {
-        return entity.type === 'object' && entity.objectType === 'Item' &&
-               bot.entity.position.distanceTo(entity.position) < (radius || 5);
-    });
-    
-    if (items.length > 0) {
-        log(colors.green + '[↓] ' + bot.username + ' collecting ' + items.length + ' nearby items...' + colors.reset);
-    }
 }
 
 function createBot(name) {
@@ -355,19 +334,26 @@ function createBot(name) {
     bot.queueJoined = false;
     bot.fullyJoined = false;
     
-    // Enable useful features
     autoRespawn(bot);
     trackPlaytime(bot);
     if (config.botSettings.autoAcceptTeleport) autoAcceptTeleport(bot);
 
     bot.on('spawn', function() {
         bot.spawned = true;
-        bot.loginAttempted = false;
-        bot.queueJoined = false;
         
         if (!bot.fullyJoined) {
             log(colors.green + '[+] ' + name + ' connected.' + colors.reset);
             sendStatusWebhook(name, 'Connected ✅', 'Bot has spawned successfully.', 3066993);
+            
+            if (!bot.loginAttempted) {
+                bot.loginAttempted = true;
+                setTimeout(function() {
+                    if (bot.spawned) {
+                        log(colors.yellow + '[!] ' + name + ' attempting auto-login...' + colors.reset);
+                        bot.chat('/login ' + config.botSettings.password);
+                    }
+                }, 3000);
+            }
         }
         
         if (bot.checkTask) clearInterval(bot.checkTask);
@@ -389,24 +375,9 @@ function createBot(name) {
             if (m) bot.stats.shards = m[0]; 
         }
         
-        // Detect login prompt
-        if (!bot.loginAttempted && (
-            lower.indexOf('/login') !== -1 || 
-            lower.indexOf('please login') !== -1 ||
-            lower.indexOf('you are not logged in') !== -1 ||
-            lower.indexOf('authentication required') !== -1
-        )) {
-            bot.loginAttempted = true;
-            log(colors.yellow + '[!] ' + name + ' attempting login...' + colors.reset);
-            setTimeout(function() {
-                bot.chat('/login ' + config.botSettings.password);
-            }, 1000);
-        }
-        
-        // Detect successful login with the specific server messages
         if (bot.loginAttempted && !bot.queueJoined && (
-            clean.indexOf('You still do not have an email address assigned') !== -1 ||
-            clean.indexOf('You still do not have second factor enabled') !== -1 ||
+            clean.indexOf('You still do not have an email address assigned to your account') !== -1 ||
+            clean.indexOf('You still do not have second factor enabled on your account') !== -1 ||
             clean.indexOf('/changemailaddress') !== -1 ||
             clean.indexOf('/requestsecondfactor') !== -1
         )) {
@@ -422,11 +393,11 @@ function createBot(name) {
             }
         }
         
-        if (lower.indexOf('added to the queue') !== -1 || lower.indexOf('position in queue') !== -1) {
+        if (lower.indexOf('position in queue') !== -1) {
             log(colors.green + '[✓] ' + name + ' in queue!' + colors.reset);
         }
         
-        if ((lower.indexOf('welcome to') !== -1 || lower.indexOf('joined the game') !== -1 || lower.indexOf('spawned in') !== -1) && !bot.fullyJoined) {
+        if ((lower.indexOf('welcome to') !== -1 || lower.indexOf('joined the game') !== -1 || lower.indexOf('sending you to donutsmp now..') !== -1) && !bot.fullyJoined) {
             bot.fullyJoined = true;
             log(colors.green + '[✓✓] ' + name + ' fully joined the game!' + colors.reset);
         }
@@ -523,13 +494,10 @@ rl.on('line', function(line) {
                 
                 targets.forEach(function(b) { 
                     if (b.currentWindow) {
-                        // Check if argument is a number (slot) or item name
                         if (!isNaN(args[1])) {
-                            // Click by slot number
                             b.clickWindow(parseInt(args[1]), 0, 0);
                             log(colors.green + '[✓] ' + b.username + ' clicked slot ' + args[1] + colors.reset);
                         } else {
-                            // Click by item name
                             const searchName = args.slice(1).join(' ').toLowerCase();
                             let found = false;
                             
@@ -565,9 +533,7 @@ rl.on('line', function(line) {
                 }
                 
                 targets.forEach(async function(b) {
-                    // Check if argument is a number (slot) or item name
                     if (!isNaN(args[1])) {
-                        // Drop by slot number
                         const item = b.inventory.slots[parseInt(args[1])];
                         if (item) {
                             await b.tossStack(item);
@@ -576,7 +542,6 @@ rl.on('line', function(line) {
                             log(colors.yellow + '[!] ' + b.username + ' has no item in slot ' + args[1] + colors.reset);
                         }
                     } else {
-                        // Drop by item name
                         const searchName = args.slice(1).join(' ').toLowerCase();
                         const items = b.inventory.items();
                         let found = false;
@@ -671,7 +636,7 @@ rl.on('line', function(line) {
                     '  ' + colors.cyan + '.startwebhook' + colors.reset + ' - Start webhook logging\n' +
                     '  ' + colors.cyan + '.stopwebhook' + colors.reset + ' - Stop webhook logging\n' +
                     '  ' + colors.cyan + '.quit / .q' + colors.reset + ' - Exit program\n\n' +
-                    colors.gray + 'Auto-features: Login, Queue, Respawn\n' +
+                    colors.gray + 'Auto-features: Login (3s after spawn), Queue, Respawn\n' +
                     'Master teleport: Set "masterName" in config.json\n' +
                     'Configure in config.json' + colors.reset);
                 break;
@@ -685,7 +650,7 @@ rl.on('line', function(line) {
                 log(colors.red + 'Unknown command. Type .help for commands.' + colors.reset);
         }
     } else {
-        const targets = focusedBot ? [bots[focusedBot]] : Object.values(bots);
+        const targets = focusedBot ? [bots[focusedBot]] : Object.values
         targets.forEach(function(b) { 
             if (b.spawned) b.chat(input); 
         });
